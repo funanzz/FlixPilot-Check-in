@@ -1,6 +1,6 @@
 #!name = FlixPilot 自动签到
 #!desc = 每天 08:00 登录并签到，可选兑换商城首件商品
-#!icon = https://raw.githubusercontent.com/huanhq99/FlixPilot/main/public/logo.png
+#!icon = https://raw.githubusercontent.com/funanzz/FlixPilot-Check-in/main/assets/flixpilot-icon.png
 #!loon_version = 3.5.1(983)
 #!tag = 签到
 #!type = normal
