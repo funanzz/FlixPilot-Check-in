@@ -2,7 +2,7 @@
 'use strict';
 
 const title = 'FlixPilot';
-const version = '1.0.1';
+const version = '1.0.2';
 const options = typeof $argument === 'object' && $argument ? $argument : {};
 let signInStatus = '';
 
@@ -67,12 +67,14 @@ async function main() {
   if ($persistentStore.write(day, purchaseKey) !== true) {
     throw new Error('无法记录本次购买，已跳过');
   }
+  let purchase;
   try {
-    await request(origin, 'post', '/api/shop', '购买', { itemId: item.id });
+    purchase = await request(origin, 'post', '/api/shop', '购买', { itemId: item.id });
   } catch (error) {
     throw new Error(error.message + '，请到商城订单确认结果');
   }
-  return signInStatus + '\n已兑换「' + name + '」';
+  const remaining = await popcornLine(origin, '兑换后爆米花余额', purchase.wallet?.popcorn);
+  return signInStatus + '\n已兑换「' + name + '」\n' + remaining;
 }
 
 function localDate(date) {
@@ -85,15 +87,17 @@ async function signIn(origin) {
     throw new Error('登录后未能读取账号，检查登录会话是否有效');
   }
   if (signedToday(current.user)) {
-    return withStreak('今天已签到', current.user.signInStreak);
+    return signInSummary(origin, '今天已签到', current.user.signInStreak, current.user.popcorn);
   }
 
   let failure;
   try {
     const result = await request(origin, 'post', '/api/auth/sign-in', '签到', undefined, true);
-    if (result.success === true) return withStreak('签到成功', result.streak);
+    if (result.success === true) {
+      return signInSummary(origin, '签到成功', result.streak, result.popcorn);
+    }
     if (String(result.message || '').trim() === '今天已签到') {
-      return withStreak('今天已签到', result.streak);
+      return signInSummary(origin, '今天已签到', result.streak, result.popcorn);
     }
     const detail = safeSiteMessage(result.message || result.error);
     failure = result.disabled === true ? '站点已关闭签到' : '站点未确认签到成功';
@@ -110,7 +114,7 @@ async function signIn(origin) {
     console.log(error.message);
   }
   if (verified && signedToday(verified.user)) {
-    return withStreak('已核实今天签到完成', verified.user.signInStreak);
+    return signInSummary(origin, '已核实今天签到完成', verified.user.signInStreak, verified.user.popcorn);
   }
   throw new Error(failure);
 }
@@ -124,8 +128,22 @@ function signedToday(user) {
   return Number.isFinite(timestamp) && date(timestamp) === date(Date.now());
 }
 
-function withStreak(status, streak) {
-  return Number.isFinite(streak) ? status + '，连续 ' + streak + ' 天' : status;
+async function signInSummary(origin, status, streak, popcorn) {
+  const summary = Number.isFinite(streak) ? status + '，连续 ' + streak + ' 天' : status;
+  const balance = await popcornLine(origin, '当前爆米花余额', popcorn);
+  return summary + '\n' + balance;
+}
+
+async function popcornLine(origin, label, popcorn) {
+  if (!Number.isFinite(popcorn)) {
+    try {
+      const account = await request(origin, 'get', '/api/auth/me', '查询爆米花余额');
+      popcorn = account.user?.popcorn;
+    } catch (error) {
+      console.log(error.message);
+    }
+  }
+  return label + '：' + (Number.isFinite(popcorn) ? popcorn : '暂未获取');
 }
 
 function safeSiteMessage(value) {
