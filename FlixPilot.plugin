@@ -1,0 +1,15 @@
+#!name = FlixPilot 自动签到
+#!desc = 每天 08:00 登录并签到，可选兑换商城首件商品
+#!loon_version = 3.5.1(983)
+#!tag = 签到
+#!type = normal
+
+[Argument]
+enabled = switch,true,tag=启用插件,desc=关闭后暂停签到与自动购买
+instance = input,tag=实例地址,desc=填写 HTTPS 站点根地址
+username = input,tag=用户名,desc=填写 FlixPilot 登录用户名
+password = input,tag=密码,desc=填写 FlixPilot 登录密码
+autoBuy = switch,false,tag=自动购买首件商品,desc=开启后每天最多提交一次兑换并扣除对应积分或余额
+
+[Script]
+cron "0 8 * * *" then script("https://raw.githubusercontent.com/funanzz/FlixPilot-Check-in/main/FlixPilot.js", {${instance}, ${username}, ${password}, ${enabled}, ${autoBuy}}) with enable=${enabled}, tag="FlixPilot 每日签到", timeout=60
