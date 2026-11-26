@@ -14,7 +14,7 @@ Loon 和 Quantumult X 共用的 FlixPilot 签到脚本。每天按设备时间 *
 
 建议使用 Build 934 或以上版本。打开链接后，在 QX 任务库里添加「FlixPilot 每日签到」，编辑任务的实例地址、用户名和密码，再启用任务。也可以在任务列表手动运行。
 
-如果链接没有唤起 QX，可直接在任务库添加 [任务库地址](gallery.json)，或手动将 [QX 任务模板](FlixPilot.conf) 的任务行加入 `[task_local]`。
+如果链接没有唤起 QX，可直接在任务库添加 [任务库地址](https://raw.githubusercontent.com/funanzz/FlixPilot-Check-in/main/gallery.json)，或手动将 [QX 任务模板](FlixPilot.conf) 的任务行加入 `[task_local]`。
 
 实例地址填写站点的 HTTPS 根地址。若参数值含空格、`&`、`#`、`=`、`+`、`%` 或逗号，先对该值做 URL 编码。带账号和密码的配置请仅在自己设备使用，分享配置前移除这些值。
 
