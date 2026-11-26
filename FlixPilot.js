@@ -1,9 +1,10 @@
-/* Loon 3.5.1 (983)+ */
+/* Loon 3.5.1 (983)+ / Quantumult X (934)+ */
 'use strict';
 
 const title = 'FlixPilot';
-const version = '1.0.2';
-const options = typeof $argument === 'object' && $argument ? $argument : {};
+const version = '1.1.0';
+const isQX = typeof $task !== 'undefined' && typeof $task.fetch === 'function';
+const options = isQX ? qxOptions() : (typeof $argument === 'object' && $argument ? $argument : {});
 let signInStatus = '';
 
 async function main() {
@@ -17,20 +18,20 @@ async function main() {
   if (!/^https:\/\/(?:[a-z0-9.-]+|\[[0-9a-f:]+\])(?::[0-9]{1,5})?$/i.test(origin)) {
     throw new Error('请填写 HTTPS 实例根地址，例如 https://example.com');
   }
-  if (!username || !password) throw new Error('请在插件参数中填写用户名和密码');
+  if (!username || !password) throw new Error('请填写用户名和密码');
 
   const day = localDate(new Date());
   const purchaseKey = 'flixpilot.lastPurchaseAttempt:' + JSON.stringify([
     origin.toLowerCase(), username
   ]);
 
-  console.log('FlixPilot ' + version);
+  console.log('FlixPilot ' + version + (isQX ? ' (Quantumult X)' : ' (Loon)'));
   await request(origin, 'post', '/api/auth/login', '登录', { username, password });
   signInStatus = await signIn(origin);
   console.log(signInStatus);
   if (options.autoBuy !== true) return signInStatus;
 
-  if ($persistentStore.read(purchaseKey) === day) {
+  if (readLocal(purchaseKey) === day) {
     return signInStatus + '\n今天已提交过自动购买';
   }
   const shop = await request(origin, 'get', '/api/shop', '读取商城');
@@ -61,10 +62,10 @@ async function main() {
   }
 
   // Record before POST. A timeout can occur after the server deducts the cost.
-  if ($persistentStore.read(purchaseKey) === day) {
+  if (readLocal(purchaseKey) === day) {
     return signInStatus + '\n今天已提交过自动购买';
   }
-  if ($persistentStore.write(day, purchaseKey) !== true) {
+  if (!writeLocal(day, purchaseKey)) {
     throw new Error('无法记录本次购买，已跳过');
   }
   let purchase;
@@ -157,52 +158,98 @@ function safeSiteMessage(value) {
     .replace(/\s+/g, ' ').trim().slice(0, 140);
 }
 
-function request(origin, method, path, action, payload, allowBusinessFailure = false) {
+function qxOptions() {
+  const args = (typeof $environment === 'object' && $environment?.variables) || {};
+  return {
+    enabled: true,
+    instance: args.instance,
+    username: args.username,
+    password: args.password,
+    autoBuy: args.autoBuy === 'true'
+  };
+}
+
+function readLocal(key) {
+  return isQX ? $prefs.valueForKey(key) : $persistentStore.read(key);
+}
+
+function writeLocal(value, key) {
+  if (!isQX) return $persistentStore.write(value, key) === true;
+  $prefs.setValueForKey(value, key);
+  return readLocal(key) === value;
+}
+
+function notify(subtitle, message) {
+  if (isQX) $notify(title, subtitle, message);
+  else $notification.post(title, subtitle, message);
+}
+
+async function sendRequest(method, settings) {
+  if (isQX) {
+    const response = await $task.fetch({
+      ...settings,
+      method: method.toUpperCase(),
+      opts: { 'auto-cookie': true, redirection: false, 'skip-cert-verify': false }
+    });
+    return { status: response.statusCode, data: response.body };
+  }
+
+  return new Promise((resolve, reject) => {
+    $httpClient[method]({
+      ...settings,
+      'auto-cookie': true,
+      'auto-redirect': false,
+      insecure: false
+    }, (error, response, data) => {
+      if (error || !response) reject(new Error('HTTP request failed'));
+      else resolve({ status: response.status, data });
+    });
+  });
+}
+
+async function request(origin, method, path, action, payload, allowBusinessFailure = false) {
   const settings = {
     url: origin + path,
-    headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
-    'auto-cookie': true,
-    'auto-redirect': false,
-    insecure: false
+    headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' }
   };
   if (payload !== undefined) {
     settings.headers['Content-Type'] = 'application/json';
     settings.body = JSON.stringify(payload);
   }
-  return new Promise((resolve, reject) => {
-    $httpClient[method](settings, (error, response, data) => {
-      if (error || !response) {
-        reject(new Error(action + '请求失败，请检查网络或实例地址'));
-        return;
-      }
-      const status = Number(response.status);
-      if (status < 200 || status >= 300 || !Number.isFinite(status)) {
-        reject(new Error(action + '失败（HTTP ' + status + '）'));
-        return;
-      }
-      try {
-        const result = JSON.parse(data);
-        if (!result || typeof result !== 'object' || Array.isArray(result)) {
-          throw new Error();
-        }
-        if (!allowBusinessFailure && (result.error || result.success === false)) {
-          reject(new Error('站点拒绝' + action));
-          return;
-        }
-        resolve(result);
-      } catch (_) {
-        reject(new Error(action + '响应格式不符'));
-      }
-    });
-  });
+
+  let response;
+  try {
+    response = await sendRequest(method, settings);
+  } catch (_) {
+    throw new Error(action + '请求失败，请检查网络或实例地址');
+  }
+
+  const status = Number(response.status);
+  if (!Number.isFinite(status) || status < 200 || status >= 300) {
+    throw new Error(action + '失败（HTTP ' + status + '）');
+  }
+
+  let result;
+  try {
+    result = JSON.parse(response.data);
+  } catch (_) {
+    throw new Error(action + '响应格式不符');
+  }
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new Error(action + '响应格式不符');
+  }
+  if (!allowBusinessFailure && (result.error || result.success === false)) {
+    throw new Error('站点拒绝' + action);
+  }
+  return result;
 }
 
 main()
   .then(message => {
-    if (message) $notification.post(title, '每日任务', message);
+    if (message) notify('每日任务', message);
   }, error => {
     const message = signInStatus ? signInStatus + '\n' + error.message : error.message;
     console.log(message);
-    $notification.post(title, '任务未完成', message);
+    notify('任务未完成', message);
   })
   .finally(() => $done());
