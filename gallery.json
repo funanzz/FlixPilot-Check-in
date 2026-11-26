@@ -1,0 +1,9 @@
+{
+  "name": "FlixPilot Check-in",
+  "task": [
+    {
+      "config": "0 8 * * * https://raw.githubusercontent.com/funanzz/FlixPilot-Check-in/main/FlixPilot.js#instance=https://example.com&username=USERNAME&password=PASSWORD&autoBuy=false, tag=FlixPilot 每日签到, img-url=https://raw.githubusercontent.com/funanzz/FlixPilot-Check-in/main/assets/flixpilot-icon.png, enabled=false"
+    }
+  ],
+  "description": "FlixPilot 每日签到 · Quantumult X"
+}
